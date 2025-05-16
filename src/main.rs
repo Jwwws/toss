@@ -43,7 +43,7 @@ struct PrimVisualizer {
 impl Default for PrimVisualizer {
     fn default() -> Self {
         let mut nodes = Vec::new();
-        // 生成环形布局的节点
+        
         for i in 0..5 {
             let angle = (i as f32) * std::f32::consts::TAU / 5.0;
             nodes.push(Node {
@@ -162,7 +162,7 @@ impl eframe::App for PrimVisualizer {
 
             let painter = ui.painter();
 
-            // 绘制边
+           
             for edge in &self.edges {
                 let from_pos = self.nodes[edge.from].position;
                 let to_pos = self.nodes[edge.to].position;
@@ -177,7 +177,7 @@ impl eframe::App for PrimVisualizer {
 
                 painter.line_segment([from_pos, to_pos], (2.5, color));
 
-                // 计算中点坐标
+                
                 let mid_point = {
                     let from_vec = from_pos.to_vec2();
                     let to_vec = to_pos.to_vec2();
@@ -193,7 +193,7 @@ impl eframe::App for PrimVisualizer {
                 );
             }
 
-            // 绘制节点
+          
             for node in &self.nodes {
                 let color = if node.visited {
                     Color32::from_rgb(100, 200, 255)
@@ -211,7 +211,7 @@ impl eframe::App for PrimVisualizer {
                 );
             }
 
-            // 状态面板
+           
             egui::Window::new("Algorithm status").show(ctx, |ui| {
                 ui.label(format!("visited node: {}/{}", self.visited.len(), self.nodes.len()));
                 ui.label(format!("unvisited in queue: {}", self.priority_queue.len()));
