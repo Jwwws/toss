@@ -1,153 +1,233 @@
 use eframe::egui;
-use std::time::Duration;
+use egui::{Color32, Pos2};
+use std::collections::{BinaryHeap, HashSet};
 
-// 排序状态跟踪
-struct BubbleSortVisualizer {
-    data: Vec<u32>,           // 待排序数据
-    i: usize,                // 外层循环索引
-    j: usize,                // 内层循环索引
-    comparing: bool,         // 是否正在比较
-    swapped: bool,           // 本轮是否发生交换
-    running: bool,           // 是否正在运行
-    done: bool,              // 是否已完成排序
+#[derive(Debug, Clone)]
+struct Node {
+    id: usize,
+    position: Pos2,
+    visited: bool,
 }
 
-impl Default for BubbleSortVisualizer {
-    fn default() -> Self {
-        Self {
-            data: vec![35, 12, 68, 42, 7, 23, 94, 51],
-            i: 0,
-            j: 0,
-            comparing: false,
-            swapped: false,
-            running: false,
-            done: false,
-        }
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Edge {
+    from: usize,
+    to: usize,
+    weight: i32,
+    selected: bool,
+}
+
+impl Ord for Edge {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.weight.cmp(&self.weight)
     }
 }
 
-impl eframe::App for BubbleSortVisualizer {
+impl PartialOrd for Edge {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+struct PrimVisualizer {
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
+    priority_queue: BinaryHeap<Edge>,
+    visited: HashSet<usize>,
+    current_edge: Option<Edge>,
+    running: bool,
+    step_delay: f32,
+    accumulated_time: f32,
+}
+
+impl Default for PrimVisualizer {
+    fn default() -> Self {
+        let mut nodes = Vec::new();
+        // 生成环形布局的节点
+        for i in 0..5 {
+            let angle = (i as f32) * std::f32::consts::TAU / 5.0;
+            nodes.push(Node {
+                id: i,
+                position: Pos2::new(
+                    300.0 + 200.0 * angle.cos(),
+                    300.0 + 200.0 * angle.sin(),
+                ),
+                visited: false,
+            });
+        }
+
+        let edges = vec![
+            Edge { from: 0, to: 1, weight: 2, selected: false },
+            Edge { from: 0, to: 3, weight: 6, selected: false },
+            Edge { from: 1, to: 2, weight: 3, selected: false },
+            Edge { from: 1, to: 3, weight: 8, selected: false },
+            Edge { from: 1, to: 4, weight: 5, selected: false },
+            Edge { from: 2, to: 4, weight: 7, selected: false },
+            Edge { from: 3, to: 4, weight: 9, selected: false },
+        ];
+
+        let mut vis = Self {
+            nodes,
+            edges,
+            priority_queue: BinaryHeap::new(),
+            visited: HashSet::new(),
+            current_edge: None,
+            running: false,
+            step_delay: 0.5,
+            accumulated_time: 0.0,
+        };
+
+        vis.initialize_algorithm();
+        vis
+    }
+}
+
+impl PrimVisualizer {
+    fn initialize_algorithm(&mut self) {
+        self.visited.clear();
+        self.priority_queue.clear();
+        self.current_edge = None;
+        self.edges.iter_mut().for_each(|e| e.selected = false);
+        self.nodes.iter_mut().for_each(|n| n.visited = false);
+
+        if !self.nodes.is_empty() {
+            self.visited.insert(0);
+            self.nodes[0].visited = true;
+            self.add_edges_to_queue(0);
+        }
+    }
+
+    fn add_edges_to_queue(&mut self, node_id: usize) {
+        for edge in &self.edges {
+            if edge.from == node_id && !self.visited.contains(&edge.to) {
+                self.priority_queue.push(edge.clone());
+            }
+            if edge.to == node_id && !self.visited.contains(&edge.from) {
+                self.priority_queue.push(edge.clone());
+            }
+        }
+    }
+
+    fn step(&mut self) {
+        while let Some(edge) = self.priority_queue.pop() {
+            let target = if self.visited.contains(&edge.from) {
+                edge.to
+            } else {
+                edge.from
+            };
+
+            if !self.visited.contains(&target) {
+                self.current_edge = Some(edge.clone());
+                self.visited.insert(target);
+                self.nodes[target].visited = true;
+                self.add_edges_to_queue(target);
+
+                if let Some(e) = self.edges.iter_mut().find(|e| *e == &edge) {
+                    e.selected = true;
+                }
+                return;
+            }
+        }
+        self.running = false;
+    }
+}
+
+impl eframe::App for PrimVisualizer {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("controls").show(ctx, |ui| {
-            ui.heading("bubblesort");
-            
-            // 控制按钮
-            ui.horizontal(|ui| {
-                if ui.button("start").clicked() && !self.done {
-                    self.running = true;
-                }
-                if ui.button("stop").clicked() {
-                    self.running = false;
-                }
-                if ui.button( "next").clicked() && !self.running && !self.done {
-                    self.step();
-                }
-                if ui.button("reset").clicked() {
-                    *self = Self::default();
-                }
+        if self.running {
+            self.accumulated_time += ctx.input(|i| i.unstable_dt);
+            if self.accumulated_time >= self.step_delay {
+                self.accumulated_time = 0.0;
+                self.step();
+                ctx.request_repaint();
+            }
+        }
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::SidePanel::left("controls").show(ctx, |ui| {
+                ui.heading("Prim 算法控制");
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    if ui.button(if self.running { "⏸ 暂停" } else { "▶ 开始" }).clicked() {
+                        self.running = !self.running;
+                    }
+                    if ui.button("↺ 重置").clicked() {
+                        self.initialize_algorithm();
+                    }
+                });
+
+                ui.add(egui::Slider::new(&mut self.step_delay, 0.1..=2.0).text("步骤间隔"));
             });
 
-            // 状态显示
-            ui.separator();
-            ui.label(format!("now: {}", 
-                if self.done { "finished" } 
-                else if self.running { "running..." } 
-                else { "stopped" }
-            ));
-            ui.label(format!("compared time: {}", self.i * (self.data.len() - 1) + self.j));
-            ui.label(format!("switched time: {}", self.i));
-        });
-
-        // 主可视化区域
-        egui::CentralPanel::default().show(ctx, |ui| {
             let painter = ui.painter();
-            let spacing = 40.0;
-            let start_x = 50.0;
-            let base_y = 300.0;
-            let max_height = 200.0;
 
-            // 计算每个元素的绘制参数
-            let max_value = *self.data.iter().max().unwrap_or(&1) as f32;
-            let column_width = 30.0;
-
-            for (idx, &value) in self.data.iter().enumerate() {
-                let height = (value as f32 / max_value) * max_height;
-                let x = start_x + idx as f32 * spacing;
+            // 绘制边
+            for edge in &self.edges {
+                let from_pos = self.nodes[edge.from].position;
+                let to_pos = self.nodes[edge.to].position;
                 
-                // 确定颜色
-                let color = if self.done {
-                    egui::Color32::LIGHT_GREEN // 已完成
-                } else if idx >= self.data.len() - self.i {
-                    egui::Color32::GREEN // 已排序部分
-                } else if self.comparing && (idx == self.j || idx == self.j + 1) {
-                    egui::Color32::RED // 正在比较的元素
+                let color = if edge.selected {
+                    Color32::GREEN
+                } else if Some(edge) == self.current_edge.as_ref() {
+                    Color32::YELLOW
                 } else {
-                    egui::Color32::GRAY // 未处理部分
+                    Color32::from_gray(100)
                 };
 
-                // 绘制柱状图
-                painter.rect_filled(
-                    egui::Rect::from_min_size(
-                        egui::pos2(x, base_y - height),
-                        egui::vec2(column_width, height),
-                    ),
-                    5.0,
-                    color,
-                );
+                painter.line_segment([from_pos, to_pos], (2.5, color));
 
-                // 显示数值
+                // 计算中点坐标
+                let mid_point = {
+                    let from_vec = from_pos.to_vec2();
+                    let to_vec = to_pos.to_vec2();
+                    (from_vec + to_vec) / 2.0
+                };
+
                 painter.text(
-                    egui::pos2(x + column_width/2.0, base_y + 20.0),
+                    mid_point.to_pos2(),
                     egui::Align2::CENTER_CENTER,
-                    value.to_string(),
+                    edge.weight.to_string(),
                     egui::FontId::monospace(14.0),
-                    egui::Color32::BLACK,
+                    Color32::WHITE,
                 );
             }
-        });
 
-        // 自动步进逻辑
-        if self.running && !self.done {
-            ctx.request_repaint_after(Duration::from_millis(500));
-            self.step();
-        }
-    }
-}
+            // 绘制节点
+            for node in &self.nodes {
+                let color = if node.visited {
+                    Color32::from_rgb(100, 200, 255)
+                } else {
+                    Color32::from_gray(80)
+                };
 
-impl BubbleSortVisualizer {
-    fn step(&mut self) {
-        if self.i >= self.data.len() - 1 {
-            self.done = true;
-            return;
-        }
-
-        self.comparing = true;
-        
-        if self.data[self.j] > self.data[self.j + 1] {
-            self.data.swap(self.j, self.j + 1);
-            self.swapped = true;
-        }
-
-        // 移动到下一对元素
-        self.j += 1;
-
-        // 完成一轮内循环
-        if self.j >= self.data.len() - 1 - self.i {
-            self.i += 1;
-            self.j = 0;
-            if !self.swapped {
-                self.done = true;
+                painter.circle_filled(node.position, 20.0, color);
+                painter.text(
+                    node.position,
+                    egui::Align2::CENTER_CENTER,
+                    node.id.to_string(),
+                    egui::FontId::monospace(18.0),
+                    Color32::WHITE,
+                );
             }
-            self.swapped = false;
-        }
+
+            // 状态面板
+            egui::Window::new("Algorithm status").show(ctx, |ui| {
+                ui.label(format!("visited node: {}/{}", self.visited.len(), self.nodes.len()));
+                ui.label(format!("unvisited node: {}", self.priority_queue.len()));
+                if let Some(edge) = &self.current_edge {
+                    ui.label(format!("当前边: {} ↔ {} (权重: {})", edge.from, edge.to, edge.weight));
+                }
+            });
+        });
     }
 }
 
 fn main() {
     let options = eframe::NativeOptions::default();
-    let _ =eframe::run_native(
-        "bubblesort",
+   let _ = eframe::run_native(
+        "Prim",
         options,
-        Box::new(|_| Box::new(BubbleSortVisualizer::default())),
+        Box::new(|_cc| Box::new(PrimVisualizer::default())),
     );
 }
