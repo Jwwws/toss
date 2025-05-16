@@ -145,19 +145,19 @@ impl eframe::App for PrimVisualizer {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::SidePanel::left("controls").show(ctx, |ui| {
-                ui.heading("Prim 算法控制");
+                ui.heading("Prim ");
                 ui.separator();
 
                 ui.horizontal(|ui| {
-                    if ui.button(if self.running { "⏸ 暂停" } else { "▶ 开始" }).clicked() {
+                    if ui.button(if self.running { "stop" } else { "start" }).clicked() {
                         self.running = !self.running;
                     }
-                    if ui.button("↺ 重置").clicked() {
+                    if ui.button("reset").clicked() {
                         self.initialize_algorithm();
                     }
                 });
 
-                ui.add(egui::Slider::new(&mut self.step_delay, 0.1..=2.0).text("步骤间隔"));
+                ui.add(egui::Slider::new(&mut self.step_delay, 0.1..=2.0).text("Step interval"));
             });
 
             let painter = ui.painter();
@@ -214,9 +214,9 @@ impl eframe::App for PrimVisualizer {
             // 状态面板
             egui::Window::new("Algorithm status").show(ctx, |ui| {
                 ui.label(format!("visited node: {}/{}", self.visited.len(), self.nodes.len()));
-                ui.label(format!("unvisited node: {}", self.priority_queue.len()));
+                ui.label(format!("unvisited in queue: {}", self.priority_queue.len()));
                 if let Some(edge) = &self.current_edge {
-                    ui.label(format!("当前边: {} ↔ {} (权重: {})", edge.from, edge.to, edge.weight));
+                    ui.label(format!("now: {} ↔ {} (weight: {})", edge.from, edge.to, edge.weight));
                 }
             });
         });
