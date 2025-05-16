@@ -189,7 +189,7 @@ impl eframe::App for PrimVisualizer {
                     egui::Align2::CENTER_CENTER,
                     edge.weight.to_string(),
                     egui::FontId::monospace(14.0),
-                    Color32::WHITE,
+                    Color32::RED,
                 );
             }
 
