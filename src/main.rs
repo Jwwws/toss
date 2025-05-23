@@ -230,4 +230,4 @@ fn main() {
         options,
         Box::new(|_cc| Box::new(PrimVisualizer::default())),
     );
-}
+}1
